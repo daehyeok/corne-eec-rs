@@ -1,35 +1,7 @@
-use core::{self, char};
-
-use heapless::String;
-use keyberon::layout::Event;
-use log;
-
 use crate::analog::{RxModule, TxModule};
 use crate::debounce::Debouncer;
 use crate::error::KeyboardError;
-
-#[allow(dead_code)]
-fn debug_print_2d_arr<const ROWS: usize, const COLS: usize>(arr: &[[u16; COLS]; ROWS]) {
-    let mut s: String<1024> = String::new();
-
-    for r in arr.iter() {
-        for c in r.iter() {
-            let d = u32::from(*c);
-            // ugly implement of string converting.
-            s.push(char::from_digit((d / 1000) % 10, 10).unwrap())
-                .unwrap();
-            s.push(char::from_digit((d / 100) % 10, 10).unwrap())
-                .unwrap();
-            s.push(char::from_digit((d / 10) % 10, 10).unwrap())
-                .unwrap();
-            s.push(char::from_digit(d % 10, 10).unwrap()).unwrap();
-            s.push_str(", ").unwrap();
-        }
-        s.push_str("\n").unwrap();
-    }
-
-    log::debug!("{}", s);
-}
+use crate::event::Event;
 
 pub trait Scanner {
     // return changed key's coordnation.
@@ -46,11 +18,12 @@ where
 {
     rx: RX,
     tx: TX,
+    transform: fn(u8, u8) -> (u8, u8),
 
     debouncer: Debouncer<TXSIZE, RXSIZE>,
 
-    limits: [[u16; RXSIZE]; TXSIZE],
-    values: [[u16; RXSIZE]; TXSIZE],
+    thresholds: [[RX::AdcUnit; RXSIZE]; TXSIZE],
+    values: [[RX::AdcUnit; RXSIZE]; TXSIZE],
 
     coord_iter: CoordIterator<TXSIZE, RXSIZE>,
 }
@@ -60,40 +33,79 @@ where
     TX: TxModule,
     RX: RxModule,
 {
-    pub fn new(tx: TX, rx_mux: RX, nb_bounce: u8, limits: [[u16; RXSIZE]; TXSIZE]) -> Self {
+    pub fn new(
+        tx: TX,
+        rx_mux: RX,
+        transform: fn(u8, u8) -> (u8, u8),
+        nb_bounce: u8,
+        thresholds: [[RX::AdcUnit; RXSIZE]; TXSIZE],
+    ) -> Self {
         Self {
             tx,
             rx: rx_mux,
+            transform,
+
             debouncer: Debouncer::new(nb_bounce),
-            limits,
-            values: [[0; RXSIZE]; TXSIZE],
+            thresholds,
+            values: [[RX::AdcUnit::default(); RXSIZE]; TXSIZE],
             coord_iter: CoordIterator::<TXSIZE, RXSIZE>::new(),
         }
     }
 
+    #[inline(always)]
+    fn read_raw(&mut self, coord: &MatrixCoord) -> RX::AdcUnit {
+        self.tx.charge_capacitor(coord.tx);
+        self.rx.read()
+    }
+
     fn scan_raw(&mut self, coord: &MatrixCoord) -> Result<Option<Event>, KeyboardError> {
-        self.rx.select(coord.rx)?;
-        self.tx.charge_capacitor(coord.tx)?;
-        let value = self.rx.read()?;
-        self.tx.discharge_capacitor(coord.tx)?;
+        #![allow(unused_assignments)]
+        let mut value: RX::AdcUnit = RX::AdcUnit::default();
+
+        self.rx.select(coord.rx);
+        #[cfg(feature = "cortex-m")]
+        {
+            cortex_m::interrupt::free(|_| value = self.read_raw(coord));
+        }
+        self.tx.discharge_capacitor(coord.tx);
+
+        #[cfg(not(feature = "cortex-m"))]
+        {
+            value = self.read_raw(coord);
+        }
 
         self.values[coord.tx][coord.rx] = value;
-        let is_pressed = value > self.limits[coord.tx][coord.rx];
+        let is_pressed = value > self.thresholds[coord.tx][coord.rx];
 
         if self.debouncer.update(coord.tx, coord.rx, is_pressed)? {
+            let (tx, rx) = (self.transform)(coord.tx as u8, coord.rx as u8);
             let e = match is_pressed {
-                true => Event::Press(coord.rx as u8, coord.tx as u8),
-                false => Event::Release(coord.rx as u8, coord.tx as u8),
+                true => Event::KeyPress(tx, rx),
+                false => Event::KeyRelease(tx, rx),
             };
 
             return Ok(Some(e));
         };
 
-        return Ok(None);
+        Ok(None)
+    }
+
+    pub fn raw_values(&self) -> &[[RX::AdcUnit; RXSIZE]; TXSIZE] {
+        &self.values
+    }
+
+    pub fn scan(&mut self) -> Option<Event> {
+        while let Some(coord) = self.coord_iter.next() {
+            match self.scan_raw(&coord) {
+                Ok(Some(e)) => return Some(e),
+                _ => continue,
+            }
+        }
+        None
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(defmt::Format, Debug, Clone)]
 struct MatrixCoord {
     tx: usize,
     rx: usize,
@@ -114,8 +126,12 @@ impl<const TXSIZE: usize, const RXSIZE: usize> CoordIterator<TXSIZE, RXSIZE> {
         self.coord.tx = 0;
         self.coord.rx = 0;
     }
+}
 
-    fn next(&mut self) -> Option<MatrixCoord> {
+impl<const TXSIZE: usize, const RXSIZE: usize> Iterator for CoordIterator<TXSIZE, RXSIZE> {
+    type Item = MatrixCoord;
+
+    fn next(&mut self) -> Option<Self::Item> {
         // reach the end of matrix
         if self.coord.rx == RXSIZE {
             self.reset();
@@ -129,22 +145,5 @@ impl<const TXSIZE: usize, const RXSIZE: usize> CoordIterator<TXSIZE, RXSIZE> {
         self.coord.tx %= TXSIZE;
 
         Some(cur)
-    }
-}
-
-#[allow(unused_must_use)]
-impl<TX, RX, const TXSIZE: usize, const RXSIZE: usize> Scanner for ECScanner<TX, RX, TXSIZE, RXSIZE>
-where
-    TX: TxModule,
-    RX: RxModule,
-{
-    fn scan(&mut self) -> Result<Option<Event>, KeyboardError> {
-        while let Some(coord) = self.coord_iter.next() {
-            if let Some(e) = self.scan_raw(&coord)? {
-                return Ok(Some(e));
-            }
-        }
-
-        Ok(None)
     }
 }

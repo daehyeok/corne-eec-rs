@@ -1,0 +1,54 @@
+[package]
+edition = "2021"
+name = "corne-eec-nrf"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[features]
+nightly = ["embassy-executor/nightly", "embassy-nrf/nightly", "embassy-nrf/unstable-traits", "embedded-io/async"]
+# default = ["log-noop", "nightly"]
+default = ["debugger", "nightly"]
+debugger = ["panic-probe", "defmt-rtt", "defmt"]
+release = ["nightly", "panic-reset", "log-noop"]
+log-noop = []
+
+[dependencies]
+embedded-hal = { version = "0.2.7", features = ["unproven"] }
+eck-rs = {path = "../eck-rs", features = ["cortex-m"]}
+embassy-futures = { version = "0.1.0"}
+embassy-sync = { version = "0.2.0", features = ["defmt"] }
+embassy-executor = { version = "0.2.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt", "integrated-timers"] }
+embassy-time = { version = "0.1.1",  features = ["defmt", "defmt-timestamp-uptime"] }
+embedded-io = "0.4.0"
+defmt = { version = "0.3", optional = true }
+defmt-rtt = { version = "0.4", optional = true }
+static_cell = "1.1"
+keyberon = { git="https://github.com/TeXitoi/keyberon", rev="a94f239" }
+cortex-m = { version = "0.7.7", features = ["linker-plugin-lto", "inline-asm", "critical-section-single-core"] }
+cortex-m-rt = "0.7.2"
+panic-probe = { version = "0.3.1", features = ["print-defmt"], optional = true }
+futures = { version = "0.3.17", default-features = false, features = ["async-await"] }
+rand = { version = "0.8.4", default-features = false }
+embedded-storage = "0.3.0"
+usbd-hid = "0.6.0"
+serde = { version = "1.0.136", default-features = false }
+panic-reset = { version = "0.1.1", optional = true }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy", features = [
+  "defmt",
+  "unstable-pac",
+  "nrf52840",
+  "time-driver-rtc1",
+  "gpiote",
+  "nfc-pins-as-gpio",
+] }
+embassy-usb = { git = "https://github.com/embassy-rs/embassy", features = [
+  "defmt","msos-descriptor"
+]}
+once_cell = {version ="1.17.2", default-features = false, features=["race", "atomic-polyfill"]}
+nb = "1.1.0"
+postcard = "1.0.4"
+heapless = "0.7.16"
+
+
+# lorawan-device = { version = "0.10.0", default-features = false, features = ["async", "external-lora-phy"], optional = true }
+# lorawan = { version = "0.7.3", default-features = false, features = ["default-crypto"], optional = true }

@@ -127,13 +127,16 @@ where
     }
 
     pub async fn run(&mut self) {
-        debug!("Trying read");
+        info!("Start UART read task.");
+        if let Err(e) = self.uart_rx.start() {
+            error!("UART start error: {:?}", e);
+        };
 
         loop {
             let mut buf = [0u8; MSG_BUFFER_SIZE];
             let res = self.uart_rx.read(&mut buf).await;
             if let Err(e) = res {
-                error!("{:?}", e);
+                error!("UART read error: {:?}", e);
                 continue;
             }
             let len = res.unwrap();

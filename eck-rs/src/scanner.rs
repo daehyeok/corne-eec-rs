@@ -2,6 +2,7 @@ use crate::analog::{RxModule, TxModule};
 use crate::debounce::Debouncer;
 use crate::error::KeyboardError;
 use crate::event::Event;
+use defmt::*;
 
 pub trait Scanner {
     // return changed key's coordnation.
@@ -67,12 +68,12 @@ where
         {
             cortex_m::interrupt::free(|_| value = self.read_raw(coord));
         }
-        self.tx.discharge_capacitor(coord.tx);
 
         #[cfg(not(feature = "cortex-m"))]
         {
             value = self.read_raw(coord);
         }
+        self.tx.discharge_capacitor(coord.tx);
 
         self.values[coord.tx][coord.rx] = value;
         let is_pressed = value > self.thresholds[coord.tx][coord.rx];
@@ -84,6 +85,17 @@ where
                 false => Event::KeyRelease(tx, rx),
             };
 
+            if let Event::KeyPress(_, _) = e {
+                debug!(
+                    "Key press event: ({:?}, {:?}) -> ({:?}, {:?}) - {:?}",
+                    coord.tx,
+                    coord.rx,
+                    tx,
+                    rx,
+                    Debug2Format(&value)
+                );
+            }
+
             return Ok(Some(e));
         };
 
@@ -92,6 +104,14 @@ where
 
     pub fn raw_values(&self) -> &[[RX::AdcUnit; RXSIZE]; TXSIZE] {
         &self.values
+    }
+
+    //discharge all lines for inital bounding.
+    pub fn dischage_all(&mut self) {
+        for rx_idx in 0..RXSIZE {
+            self.rx.select(rx_idx);
+            (0..TXSIZE).for_each(|tx| self.tx.discharge_capacitor(tx));
+        }
     }
 
     pub fn scan(&mut self) -> Option<Event> {

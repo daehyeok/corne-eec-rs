@@ -1,8 +1,11 @@
-use defmt::{debug, error};
+use defmt::{debug, error, info};
 use embassy_stm32::{peripherals, usb::Driver};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 use embassy_time::Timer;
 use embassy_usb::class::hid::{HidReader, HidReaderWriter, HidWriter, State};
-use embassy_usb::{Builder, Config};
+use embassy_usb::{Builder, Config, Handler};
+
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 
@@ -27,11 +30,15 @@ pub struct UsbHid<'a> {
     pub device: Stm32UsbDevice<'a>,
 }
 
+static CONFIGURED: Signal<CriticalSectionRawMutex, bool> = Signal::new();
+static SUSPENDED: Signal<CriticalSectionRawMutex, bool> = Signal::new();
+
 // Store everything on static.
 static USB_CONFIG: StaticCell<Config> = StaticCell::new();
 static USB_BUFFER: StaticCell<UsbBuffer> = StaticCell::new();
 static USB_STATE: StaticCell<State> = StaticCell::new();
 static USB_HID: StaticCell<UsbHid> = StaticCell::new();
+static DEVICE_HANDLER: StaticCell<DeviceStateHandler> = StaticCell::new();
 
 // embassy-usb DeviceBuilder needs some buffers for building the descriptors.
 struct UsbBuffer {
@@ -77,6 +84,9 @@ pub fn init(driver: Stm32UsbDriver<'static>) -> &'static mut UsbHid<'static> {
         &mut buffer.control_buf,
     );
 
+    let handler = DEVICE_HANDLER.init(DeviceStateHandler::new());
+    builder.handler(handler);
+
     // Create classes on the builder.
     let config = embassy_usb::class::hid::Config {
         report_descriptor: KeyboardReport::desc(),
@@ -97,9 +107,54 @@ pub fn init(driver: Stm32UsbDriver<'static>) -> &'static mut UsbHid<'static> {
     })
 }
 
+pub async fn wait_until_configured() {
+    while let false = CONFIGURED.wait().await {}
+}
+
+struct DeviceStateHandler {}
+
+impl DeviceStateHandler {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Handler for DeviceStateHandler {
+    fn enabled(&mut self, enabled: bool) {
+        debug!("USB enabled: {:?}", enabled);
+        CONFIGURED.signal(false);
+        SUSPENDED.signal(false);
+    }
+
+    fn reset(&mut self) {
+        debug!("USB reset");
+        CONFIGURED.signal(false);
+    }
+
+    fn addressed(&mut self, _addr: u8) {
+        debug!("USB addressed");
+        CONFIGURED.signal(false);
+    }
+
+    fn configured(&mut self, configured: bool) {
+        debug!("USB configured: {:?}", configured);
+        CONFIGURED.signal(configured);
+    }
+
+    fn suspended(&mut self, suspended: bool) {
+        debug!("USB suspended: {:?}", suspended);
+        if suspended {
+            SUSPENDED.signal(true);
+        } else {
+            SUSPENDED.signal(false);
+        }
+    }
+}
+
 #[embassy_executor::task]
 pub async fn usb_device_task(device: &'static mut Stm32UsbDevice<'static>) {
     // Run the USB device.
+    info!("Start USB device task.");
     device.run().await;
 }
 

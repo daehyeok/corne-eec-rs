@@ -5,12 +5,18 @@ use embedded_hal::digital::v2 as digital_hal;
 use crate::mux::Multiplxer;
 
 pub trait ADCReader {
-    type AdcUnit: core::cmp::PartialOrd + core::marker::Copy + core::default::Default;
+    type AdcUnit: core::fmt::Debug
+        + core::cmp::PartialOrd
+        + core::marker::Copy
+        + core::default::Default;
     fn read(&mut self) -> Self::AdcUnit;
 }
 
 pub trait RxModule {
-    type AdcUnit: core::cmp::PartialOrd + core::marker::Copy + core::default::Default;
+    type AdcUnit: core::fmt::Debug
+        + core::cmp::PartialOrd
+        + core::marker::Copy
+        + core::default::Default;
     fn select(&mut self, idx: usize);
     fn read(&mut self) -> Self::AdcUnit;
 }

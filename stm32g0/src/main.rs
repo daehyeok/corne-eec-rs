@@ -59,7 +59,7 @@ impl KeyboardStatus {
 
         let left_vbus_detect = left_vbus_pin.is_high();
         if !left_vbus_detect {
-            info!("left vbus is low");
+            debug!("left vbus is low");
             left_vbus_pin.set_as_output(gpio::Speed::Medium);
             left_vbus_pin.set_high();
         }
@@ -99,18 +99,20 @@ async fn main(spawner: Spawner) {
     let layout = SHARED_LAYOUT.init(layers::new_shared_layout());
 
     let status = KeyboardStatus::new(&mut p.PC6, &mut p.PA0, &mut p.PA8);
-    info!("init keyboard {:?}", status.split_side);
-    info!("usb connected: {:?}", status.usb_connected);
+    info!("Keyboard side: {:?}", status.split_side);
+    info!("USB connected: {:?}", status.usb_connected);
 
     if status.usb_connected {
         let usb_driver = usb::Driver::new(p.USB, UsbIrqs, p.PA12, p.PA11);
         let usb_hid = hid::init(usb_driver);
-        unwrap!(spawner.spawn(hid::usb_device_task(&mut usb_hid.device)));
+        spawner.must_spawn(hid::usb_device_task(&mut usb_hid.device));
+
+        hid::wait_until_configured().await;
 
         let tick_res =
             KEYBERON_TICK_RES.init(hid::KeyberonTickRes::new(&mut usb_hid.writer, layout));
-        unwrap!(spawner.spawn(hid::keyberon_tick(tick_res)));
-        unwrap!(spawner.spawn(master_event_handler(channel.receiver(), layout)));
+        spawner.must_spawn(hid::keyberon_tick(tick_res));
+        spawner.must_spawn(master_event_handler(channel.receiver(), layout));
     }
 
     //Run tasks
@@ -136,16 +138,16 @@ async fn main(spawner: Spawner) {
                 drain: opendrain_output! {p.PB2},
                 row_pins: pushpull_output!(p.PA0, p.PA1, p.PA2, p.PA3),
                 transform: config::left_matrix_transform,
-                thresholds: [[1000u16; 7]; 4],
+                thresholds: [[2000u16; 7]; 4],
                 nbounce: 2,
             };
 
             let (uart_tx, uart_rx) = uart.split();
 
             let comm_rx = comm::CommRx::new(uart_rx, channel.sender());
-            unwrap!(spawner.spawn(left_uart_read_task(comm_rx)));
+            spawner.must_spawn(left_uart_read_task(comm_rx));
             if !status.usb_connected {
-                unwrap!(spawner.spawn(left_slave_event_task(channel.receiver(), uart_tx)))
+                spawner.must_spawn(left_slave_event_task(channel.receiver(), uart_tx))
             }
 
             main_task(matrix_cfg, adc, channel.sender()).await;
@@ -171,16 +173,16 @@ async fn main(spawner: Spawner) {
                 drain: opendrain_output! {p.PA7},
                 row_pins: pushpull_output!(p.PA9, p.PA8, p.PB2, p.PB1),
                 transform: config::right_matrix_transform,
-                thresholds: [[1000u16; 7]; 4],
+                thresholds: [[2000u16; 7]; 4],
                 nbounce: 2,
             };
 
             let (uart_tx, uart_rx) = uart.split();
 
             let comm_rx = comm::CommRx::new(uart_rx, channel.sender());
-            unwrap!(spawner.spawn(right_uart_read_task(comm_rx)));
+            spawner.must_spawn(right_uart_read_task(comm_rx));
             if !status.usb_connected {
-                unwrap!(spawner.spawn(right_slave_event_task(channel.receiver(), uart_tx)))
+                spawner.must_spawn(right_slave_event_task(channel.receiver(), uart_tx))
             }
 
             main_task(matrix_cfg, adc, channel.sender()).await;
@@ -193,15 +195,15 @@ async fn main_task<ADCPIN: embassy_stm32::adc::AdcPin<peripherals::ADC1>>(
     adc: analog::Adc<'static, ADCPIN>,
     event_sender: event_channel::EventSender<'static>,
 ) {
-    let discharge_delay = analog::CortexDisChargeDelay::new();
+    info!("Start main scan task.");
 
+    let discharge_delay = analog::CortexDisChargeDelay::new();
     let mux8 = unwrap!(Mux8::new(
         matrix_cfg.col_mux_enable,
         matrix_cfg.col_mux_sels,
         matrix_cfg.col_mux_channel,
     ));
     let rx_mux = RxMux::new(mux8, adc);
-
     let tx_charger = TxCharger::new(matrix_cfg.drain, matrix_cfg.row_pins, discharge_delay);
     let mut scanner = ECScanner::new(
         tx_charger,
@@ -211,11 +213,14 @@ async fn main_task<ADCPIN: embassy_stm32::adc::AdcPin<peripherals::ADC1>>(
         matrix_cfg.thresholds,
     );
 
+    scanner.dischage_all();
+
     loop {
         while let Some(e) = scanner.scan() {
             event_sender.send(e).await;
         }
 
+        //info!("{:?}", scanner.raw_values());
         Timer::after(config::SCAN_DELAY).await;
     }
 }
@@ -262,7 +267,7 @@ async fn left_slave_event_task(
     receiver: event_channel::EventReceiver<'static>,
     mut tx: UartTx<'static, peripherals::USART1, DMA2_CH1>,
 ) {
-    info!("start left_slave_event_task");
+    info!("Start left_slave_event_task");
     slave_event_handler(receiver, &mut tx).await;
 }
 
@@ -271,18 +276,18 @@ async fn right_slave_event_task(
     receiver: event_channel::EventReceiver<'static>,
     mut tx: UartTx<'static, peripherals::USART3, DMA2_CH1>,
 ) {
-    info!("start right_slave_event_task");
+    info!("Start right_slave_event_task");
     slave_event_handler(receiver, &mut tx).await;
 }
 
 #[embassy_executor::task]
 async fn left_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART1, DMA1_CH1>) {
-    info!("start left_uart_read_task");
+    info!("Start left_uart_read_task");
     comm_rx.run().await;
 }
 
 #[embassy_executor::task]
 async fn right_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART3, DMA1_CH1>) {
-    info!("start right_uart_read_task");
+    info!("Start right_uart_read_task");
     comm_rx.run().await;
 }

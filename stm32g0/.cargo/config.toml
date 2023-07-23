@@ -1,5 +1,5 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "./.cargo/probe_run.sh"
+runner = "./script/probe_run.zsh"
 
 [build]
 target = "thumbv6m-none-eabi"

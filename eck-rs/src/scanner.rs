@@ -2,6 +2,7 @@ use crate::analog::{RxModule, TxModule};
 use crate::debounce::Debouncer;
 use crate::error::KeyboardError;
 use crate::event::Event;
+#[cfg(debug_assertions)]
 use defmt::*;
 
 pub trait Scanner {
@@ -85,15 +86,18 @@ where
                 false => Event::KeyRelease(tx, rx),
             };
 
-            if let Event::KeyPress(_, _) = e {
-                debug!(
-                    "Key press event: ({:?}, {:?}) -> ({:?}, {:?}) - {:?}",
-                    coord.tx,
-                    coord.rx,
-                    tx,
-                    rx,
-                    Debug2Format(&value)
-                );
+            #[cfg(debug_assertions)]
+            {
+                if let Event::KeyPress(_, _) = e {
+                    debug!(
+                        "Key press event: ({:?}, {:?}) -> ({:?}, {:?}) - {:?}",
+                        coord.tx,
+                        coord.rx,
+                        tx,
+                        rx,
+                        Debug2Format(&value)
+                    );
+                }
             }
 
             return Ok(Some(e));

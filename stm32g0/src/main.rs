@@ -149,7 +149,6 @@ async fn main(spawner: Spawner) {
             if !status.usb_connected {
                 spawner.must_spawn(left_slave_event_task(channel.receiver(), uart_tx))
             }
-
             main_task(matrix_cfg, adc, channel.sender()).await;
         }
         SplitSide::Right => {
@@ -220,7 +219,6 @@ async fn main_task<ADCPIN: embassy_stm32::adc::AdcPin<peripherals::ADC1>>(
             event_sender.send(e).await;
         }
 
-        //info!("{:?}", scanner.raw_values());
         Timer::after(config::SCAN_DELAY).await;
     }
 }

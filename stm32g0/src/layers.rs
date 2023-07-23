@@ -42,7 +42,7 @@ pub static LAYERS: Layers  = layout::layout! {
 /*Row4*/[No      No       No       LGui     LAlt     {FNSPC}  {FNSPC}  Enter    Down     Up       No       No     ]
     }{
 //     | 00(L0) | 01(L1) | 02(L2) | 03(L3) | 04(L4) | 05(L5) | 06(R0) | 07(R1) | 08(R2) | 09(R3) | 10(R4) | 11(R5) |
-/*Row0*/[No      No       No       No       No       No       No       No       No       Minus    Equal    No      ]
+/*Row0*/[Escape  No       No       No       No       No       No       No       No       Minus    Equal    No      ]
 /*Row1*/[No      No       No       No       No       No       No       No       No       LBracket RBracket No      ]
 /*Row2*/[No      No       No       No       No       No       No       Left     Down     Up       Right    No      ]
 /*Row3*/[No      No       No       No       No       No       No       No       No       No       No       No      ]

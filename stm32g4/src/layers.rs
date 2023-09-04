@@ -1,14 +1,10 @@
 use core::cell::RefCell;
-use embassy_sync::blocking_mutex::{raw::ThreadModeRawMutex, Mutex};
-use keyberon::{
-    action::{
-        k, l,
-        Action::{self, HoldTap, Trans},
-        HoldTapAction, HoldTapConfig,
-    },
-    key_code::KeyCode::*,
-    layout,
-};
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+use embassy_sync::blocking_mutex::Mutex;
+use keyberon::action::Action::{self, HoldTap, Trans};
+use keyberon::action::{k, l, HoldTapAction, HoldTapConfig};
+use keyberon::key_code::KeyCode::*;
+use keyberon::layout;
 pub const COLS: usize = 12;
 pub const ROWS: usize = 5;
 pub const N_LAYERS: usize = 2;

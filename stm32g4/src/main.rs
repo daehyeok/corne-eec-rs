@@ -4,23 +4,19 @@
 use crate::config::SplitSide;
 use config::MatrixConfig;
 use defmt::*;
-use eck_rs::{
-    self,
-    analog::{RxMux, TxCharger},
-    mux::Mux8,
-    scanner::ECScanner,
-};
+use eck_rs::analog::{RxMux, TxCharger};
+use eck_rs::mux::Mux8;
+use eck_rs::scanner::ECScanner;
+use eck_rs::{self};
 use embassy_executor::Spawner;
-use embassy_stm32::{
-    self, bind_interrupts, gpio,
-    peripherals::{self, DMA1_CH1, DMA2_CH1},
-    rcc::{
-        AdcClockSource, Clock48MhzSrc, ClockSrc, CrsConfig, CrsSyncSource, Pll, PllM, PllN, PllR,
-        PllSrc,
-    },
-    time::Hertz,
-    usart::{self, Uart, UartTx},
+use embassy_stm32::peripherals::{self, DMA1_CH1, DMA2_CH1};
+use embassy_stm32::rcc::{
+    AdcClockSource, Clock48MhzSrc, ClockSrc, CrsConfig, CrsSyncSource, Pll, PllM, PllN, PllR,
+    PllSrc,
 };
+use embassy_stm32::time::Hertz;
+use embassy_stm32::usart::{self, Uart, UartTx};
+use embassy_stm32::{self, bind_interrupts, gpio};
 use embassy_time::Timer;
 use paste::paste;
 use {defmt_rtt as _, panic_probe as _};
@@ -79,7 +75,7 @@ impl KeyboardStatus {
 // embassy task can't handling generic func.
 macro_rules! run_maintask {
     ($split_side:ident, $p: ident, $status: ident, $channel: ident, $spawner: ident ) => {
-        let adc = analog::Adc::new($p.ADC2, $p.PA7);
+        let adc = define_adc!($p);
         let uart = define_usart!(SplitSide::$split_side, $p);
         let matrix_cfg = define_matrix_config!(SplitSide::$split_side, $p);
 
@@ -106,7 +102,6 @@ async fn main(spawner: Spawner) {
         mul_n: PllN::Mul85,
         div_p: None,
         div_q: Some(embassy_stm32::rcc::PllQ::Div2),
-        // Main system clock at 144 MHz
         div_r: Some(PllR::Div2),
     });
 
@@ -117,7 +112,6 @@ async fn main(spawner: Spawner) {
     })));
 
     let p = embassy_stm32::init(config);
-    // Declare a bounded channel  of 3 u32s.
     let channel = event_channel::init();
 
     let status = KeyboardStatus::new();

@@ -57,6 +57,13 @@ macro_rules! __define_usart_inner{
 }
 
 #[macro_export]
+macro_rules! define_adc {
+    ($p: ident) => {
+        analog::Adc::new($p.ADC2, $p.PA7)
+    };
+}
+
+#[macro_export]
 macro_rules! define_usart {
     (SplitSide::Left, $p: ident) => {
         __define_usart_inner! {$p, USART1, PA9, PA10}

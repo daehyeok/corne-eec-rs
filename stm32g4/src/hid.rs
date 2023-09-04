@@ -1,8 +1,7 @@
 use defmt::{debug, error, info};
 use embassy_executor::Spawner;
-use embassy_stm32::bind_interrupts;
-use embassy_stm32::peripherals;
 use embassy_stm32::usb::{self, Driver};
+use embassy_stm32::{bind_interrupts, peripherals};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
 use embassy_time::Timer;

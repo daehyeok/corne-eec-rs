@@ -1,0 +1,6 @@
+[submodule "stm32g4/vendor/embassy"]
+	path = stm32g4/vendor/embassy
+	url = https://github.com/daehyeok/embassy.git
+[submodule "stm32g4/vendor/stm32-data"]
+	path = stm32g4/vendor/stm32-data
+	url = https://github.com/daehyeok/stm32-data.git

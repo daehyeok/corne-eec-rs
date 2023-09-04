@@ -1,13 +1,13 @@
 use eck_rs::analog::{ADCReader, DisChargeDelay};
 use embassy_stm32::{adc, peripherals};
 
-pub struct Adc<'a, ADCPIN: adc::AdcPin<peripherals::ADC1>> {
-    stm32_adc: adc::Adc<'a, peripherals::ADC1>,
+pub struct Adc<'a, ADCPIN: adc::AdcPin<peripherals::ADC2>> {
+    stm32_adc: adc::Adc<'a, peripherals::ADC2>,
     pin: ADCPIN,
 }
 
-impl<'a, ADCPIN: adc::AdcPin<peripherals::ADC1>> Adc<'a, ADCPIN> {
-    pub fn new(adc1: peripherals::ADC1, pin: ADCPIN) -> Self {
+impl<'a, ADCPIN: adc::AdcPin<peripherals::ADC2>> Adc<'a, ADCPIN> {
+    pub fn new(adc1: peripherals::ADC2, pin: ADCPIN) -> Self {
         let stm32_adc = adc::Adc::new(adc1, &mut embassy_time::Delay);
         Self { stm32_adc, pin }
     }
@@ -15,7 +15,7 @@ impl<'a, ADCPIN: adc::AdcPin<peripherals::ADC1>> Adc<'a, ADCPIN> {
 
 impl<'a, ADCPIN> ADCReader for Adc<'a, ADCPIN>
 where
-    ADCPIN: adc::AdcPin<peripherals::ADC1>,
+    ADCPIN: adc::AdcPin<peripherals::ADC2> + embassy_stm32::gpio::low_level::Pin,
 {
     type AdcUnit = u16;
 

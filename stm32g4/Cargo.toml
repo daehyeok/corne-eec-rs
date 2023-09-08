@@ -20,10 +20,10 @@ defmt-rtt = { version = "0.4", optional = true }
 eck-rs = { path = "../eck-rs", features = ["cortex-m"] }
 embassy-executor = { version = "0.2.0", features = ["nightly", "arch-cortex-m", "executor-thread", "defmt", "integrated-timers"] }
 embassy-futures = { version = "0.1.0" }
-embassy-stm32 = { path = "./vendor/embassy/embassy-stm32", features = ["nightly", "defmt", "unstable-pac", "stm32g431kb", "time-driver-any", "exti", "unstable-traits", "memory-x"] }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", features = ["nightly", "defmt", "unstable-pac", "stm32g431kb", "time-driver-any", "exti", "unstable-traits", "memory-x"] }
 embassy-sync = { version = "0.2.0", features = ["defmt"] }
 embassy-time = { version = "0.1.2", features = ["defmt", "defmt-timestamp-uptime", ] }
-embassy-usb = { version = "0.1.0", path = "./vendor/embassy/embassy-usb", features = ["defmt"] }
+embassy-usb = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 embedded-io = "0.4.0"
 embedded-storage = "0.3.0"

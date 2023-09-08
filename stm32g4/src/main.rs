@@ -4,22 +4,26 @@
 use crate::config::SplitSide;
 use config::MatrixConfig;
 use defmt::*;
-use eck_rs::analog::{RxMux, TxCharger};
-use eck_rs::mux::Mux8;
-use eck_rs::scanner::ECScanner;
-use eck_rs::{self};
-use embassy_executor::Spawner;
-use embassy_stm32::peripherals::{self, DMA1_CH1, DMA2_CH1};
-use embassy_stm32::rcc::{
-    AdcClockSource, Clock48MhzSrc, ClockSrc, CrsConfig, CrsSyncSource, Pll, PllM, PllN, PllR,
-    PllSrc,
+use defmt_rtt as _;
+use eck_rs::{
+    analog::{RxMux, TxCharger},
+    mux::Mux8,
+    scanner::ECScanner,
 };
-use embassy_stm32::time::Hertz;
-use embassy_stm32::usart::{self, Uart, UartTx};
-use embassy_stm32::{self, bind_interrupts, gpio};
+use embassy_executor::Spawner;
+use embassy_stm32::{
+    self, bind_interrupts, gpio,
+    peripherals::{self, DMA1_CH1, DMA2_CH1},
+    rcc::{
+        AdcClockSource, Clock48MhzSrc, ClockSrc, CrsConfig, CrsSyncSource, Pll, PllM, PllN, PllR,
+        PllSrc,
+    },
+    time::Hertz,
+    usart::{self, Uart, UartTx},
+};
 use embassy_time::Timer;
+use panic_probe as _;
 use paste::paste;
-use {defmt_rtt as _, panic_probe as _};
 
 mod analog;
 mod comm;

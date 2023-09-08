@@ -1,5 +1,7 @@
-use embassy_stm32::gpio::{AnyPin, Output};
-use embassy_stm32::usart::{self, Parity};
+use embassy_stm32::{
+    gpio::{AnyPin, Output},
+    usart::{self, Parity},
+};
 use embassy_time::Duration;
 
 #[macro_export]

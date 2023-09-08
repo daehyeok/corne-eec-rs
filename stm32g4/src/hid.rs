@@ -1,12 +1,16 @@
 use defmt::{debug, error, info};
 use embassy_executor::Spawner;
-use embassy_stm32::usb::{self, Driver};
-use embassy_stm32::{bind_interrupts, peripherals};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::signal::Signal;
+use embassy_stm32::{
+    bind_interrupts, peripherals,
+    usb::{self, Driver},
+};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::Timer;
-use embassy_usb::class::hid::{HidReaderWriter, HidWriter, State};
-use embassy_usb::{self, Builder, Config, Handler};
+use embassy_usb::{
+    self,
+    class::hid::{HidReaderWriter, HidWriter, State},
+    Builder, Config, Handler,
+};
 
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
@@ -14,7 +18,8 @@ use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 use crate::config::{
     TICK_PERIOD, USB_MANUFACTURER, USB_PID, USB_PRODUCT, USB_SERIAL_NUMBER, USB_VID,
 };
-use {defmt_rtt as _, panic_probe as _};
+use defmt_rtt as _;
+use panic_probe as _;
 
 const READ_N: usize = 1;
 const WRITE_N: usize = 8;

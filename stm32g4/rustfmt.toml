@@ -1,1 +1,1 @@
-imports_granularity = "module"
+imports_granularity = "Crate"

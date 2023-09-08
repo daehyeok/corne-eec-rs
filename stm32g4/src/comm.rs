@@ -1,9 +1,10 @@
-use core::default::Default;
-use core::num::TryFromIntError;
+use core::{default::Default, num::TryFromIntError};
 use defmt::*;
 use eck_rs::event::Event;
-use embassy_stm32::usart::{self, RingBufferedUartRx, RxDma, TxDma, UartRx, UartTx};
-use embassy_stm32::{self};
+use embassy_stm32::{
+    usart::{self, RingBufferedUartRx, RxDma, TxDma, UartRx, UartTx},
+    {self},
+};
 // use embedded_io::asynch::Read;
 // use embedded_io::asynch::Write;
 use embedded_io::blocking::ReadExactError;

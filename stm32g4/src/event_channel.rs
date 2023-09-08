@@ -1,6 +1,8 @@
 use eck_rs::event::Event;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_sync::channel::{Channel, Receiver, Sender};
+use embassy_sync::{
+    blocking_mutex::raw::NoopRawMutex,
+    channel::{Channel, Receiver, Sender},
+};
 use static_cell::StaticCell;
 
 pub type EventChannel = Channel<NoopRawMutex, Event, EVENT_CHANNEL_SIZE>;

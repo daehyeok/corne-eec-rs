@@ -55,6 +55,7 @@ struct UsbBuffer {
     device_descriptor: [u8; 256],
     config_descriptor: [u8; 256],
     bos_descriptor: [u8; 256],
+    msos_descriptor: [u8; 256],
     control_buf: [u8; 64],
 }
 
@@ -64,6 +65,7 @@ impl UsbBuffer {
             device_descriptor: [0u8; 256],
             config_descriptor: [0u8; 256],
             bos_descriptor: [0u8; 256],
+            msos_descriptor: [0u8; 256],
             control_buf: [0u8; 64],
         }
     }
@@ -98,6 +100,7 @@ pub async fn init<DP, DM>(
         &mut buffer.device_descriptor,
         &mut buffer.config_descriptor,
         &mut buffer.bos_descriptor,
+        &mut buffer.msos_descriptor,
         &mut buffer.control_buf,
     );
 
@@ -228,7 +231,7 @@ async fn master_event_handler(
 ) {
     info!("Start master_event_handler");
     loop {
-        let event = receiver.recv().await;
+        let event = receiver.receive().await;
         debug!("Received Event: {:?}", defmt::Debug2Format(&event));
 
         let key_event = match event.into_keyberon() {

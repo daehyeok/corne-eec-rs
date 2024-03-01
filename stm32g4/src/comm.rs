@@ -101,55 +101,54 @@ impl ReadStateMachine {
     }
 }
 
-pub struct CommRx<'a, T, DMA>
+pub struct CommRx<'a, T>
 where
     T: usart::BasicInstance,
-    DMA: RxDma<T>,
 {
     state_machine: ReadStateMachine,
-    uart_rx: RingBufferedUartRx<'a, T, DMA>,
+    uart_rx: RingBufferedUartRx<'a, T>,
     event_sender: EventSender<'a>,
 }
 
-impl<'a, T, DMA> CommRx<'a, T, DMA>
-where
-    T: usart::BasicInstance,
-    DMA: RxDma<T>,
-{
-    pub fn new(uart_rx: UartRx<'a, T, DMA>, event_sender: EventSender<'a>) -> Self {
-        let uart_buf = RX_RING_BUFFER.init([0u8; RING_BUFFER_SIZE]);
+// impl<'a, T, DMA> CommRx<'a, T>
+// where
+//     T: usart::BasicInstance,
+//     DMA: usart::RxDma<T>
+// {
+//     pub fn new(uart_rx: UartRx<'a, T, DMA>, event_sender: EventSender<'a>) -> Self {
+//         let uart_buf = RX_RING_BUFFER.init([0u8; RING_BUFFER_SIZE]);
 
-        Self {
-            state_machine: ReadStateMachine::default(),
-            uart_rx: uart_rx.into_ring_buffered(uart_buf),
-            event_sender,
-        }
-    }
+//         Self {
+//             state_machine: ReadStateMachine::default(),
+//             uart_rx: uart_rx.into_ring_buffered(uart_buf),
+//             event_sender,
+//         }
+//     }
 
-    pub async fn run(&mut self) {
-        info!("Start UART read task.");
-        if let Err(e) = self.uart_rx.start() {
-            error!("UART start error: {:?}", e);
-        };
+//     pub async fn run(&mut self) {
+//         info!("Start UART read task.");
+//         if let Err(e) = self.uart_rx.start() {
+//             error!("UART start error: {:?}", e);
+//         };
 
-        loop {
-            let mut buf = [0u8; MSG_BUFFER_SIZE];
-            let res = self.uart_rx.read(&mut buf).await;
-            if let Err(e) = res {
-                error!("UART read error: {:?}", e);
-                continue;
-            }
-            let len = res.unwrap();
-            for byte in buf.iter().take(len) {
-                match self.state_machine.push(*byte) {
-                    Ok(Some(e)) => self.event_sender.send(e).await,
-                    Ok(None) => {}
-                    Err(e) => error!("Failed to deserialzed. - {:?}", defmt::Debug2Format(&e)),
-                }
-            }
-        }
-    }
-}
+//         loop {
+//             let mut buf = [0u8; MSG_BUFFER_SIZE];
+//             let res = self.uart_rx.read(&mut buf).await;
+//             if let Err(e) = res {
+//                 error!("UART read error: {:?}", e);
+//                 continue;
+//             }
+//             let len = res.unwrap();
+//             for byte in buf.iter().take(len) {
+//                 match self.state_machine.push(*byte) {
+//                     Ok(Some(e)) => self.event_sender.send(e).await,
+//                     Ok(None) => {}
+//                     Err(e) => error!("Failed to deserialzed. - {:?}", defmt::Debug2Format(&e)),
+//                 }
+//             }
+//         }
+//     }
+// }
 
 // send event to other halve.
 pub async fn send<'a, T: usart::BasicInstance, DMA: TxDma<T>>(

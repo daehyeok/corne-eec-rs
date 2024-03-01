@@ -27,7 +27,6 @@ macro_rules! opendrain_output {
             gpio::Speed::VeryHigh,
             gpio::Pull::None,
         )
-        .degrade()
     };
 }
 
@@ -128,11 +127,11 @@ pub const TX_SIZE: usize = 4;
 pub type AdcUnit = u16;
 
 pub struct MatrixConfig {
-    pub col_mux_enable: Output<'static, AnyPin>,
-    pub col_mux_sels: [Output<'static, AnyPin>; 3],
+    pub col_mux_enable: Output<'static>,
+    pub col_mux_sels: [Output<'static>; 3],
     pub col_mux_channel: [u8; RX_SIZE],
-    pub drain: Output<'static, AnyPin>,
-    pub row_pins: [Output<'static, AnyPin>; TX_SIZE],
+    pub drain: embassy_stm32::gpio::OutputOpenDrain<'static>,
+    pub row_pins: [Output<'static>; TX_SIZE],
     pub transform: fn(u8, u8) -> (u8, u8),
     pub thresholds: [[AdcUnit; RX_SIZE]; TX_SIZE],
     pub nbounce: u8,

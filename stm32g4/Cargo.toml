@@ -13,17 +13,18 @@ release = ["nightly", "panic-reset", "log-noop"]
 log-noop = []
 
 [dependencies]
-cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
+cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = "0.7.2"
 defmt = { version = "0.3", optional = true }
 defmt-rtt = { version = "0.4", optional = true }
 eck-rs = { path = "../eck-rs", features = ["cortex-m"] }
-embassy-executor = { version = "0.2.0", features = ["nightly", "arch-cortex-m", "executor-thread", "defmt", "integrated-timers"] }
-embassy-futures = { version = "0.1.0" }
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy", features = ["nightly", "defmt", "unstable-pac", "stm32g431kb", "time-driver-any", "exti", "unstable-traits", "memory-x"] }
-embassy-sync = { version = "0.2.0", features = ["defmt"] }
-embassy-time = { version = "0.1.2", features = ["defmt", "defmt-timestamp-uptime", ] }
-embassy-usb = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
+
+embassy-executor = { git = "https://github.com/embassy-rs/embassy",rev = "715b6d5", version = "0.5.0", features = ["arch-cortex-m", "executor-thread", "defmt", "integrated-timers"] }
+embassy-futures = {  git = "https://github.com/embassy-rs/embassy",rev = "715b6d5", version = "0.1.0" }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy",rev = "715b6d5", features = ["defmt", "unstable-pac", "stm32g431kb", "time-driver-any", "exti",  "memory-x"] }
+embassy-sync = {  git = "https://github.com/embassy-rs/embassy",rev = "715b6d5", version = "0.5.0", features = ["defmt"] }
+embassy-time = {  git = "https://github.com/embassy-rs/embassy",rev = "715b6d5", version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+embassy-usb = { version = "0.1.0", git = "https://github.com/embassy-rs/embassy",rev = "715b6d5", features = ["defmt"] }
 embedded-hal = { version = "0.2.7", features = ["unproven"] }
 embedded-io = "0.4.0"
 embedded-storage = "0.3.0"
@@ -34,9 +35,9 @@ nb = "1.1.0"
 once_cell = { version = "1.17.2", default-features = false, features = ["race", "atomic-polyfill"] }
 panic-probe = { version = "0.3.1", features = ["print-defmt"], optional = true }
 panic-reset = { version = "0.1.1", optional = true }
+static_cell = "1.1"
+usbd-hid = "0.7.0"
 paste = "1.0.14"
 postcard = "1.0.5"
 rand = { version = "0.8.4", default-features = false }
 serde = { version = "1.0.136", default-features = false }
-static_cell = "1.1"
-usbd-hid = "0.6.0"

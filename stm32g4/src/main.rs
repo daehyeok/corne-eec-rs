@@ -14,10 +14,7 @@ use embassy_executor::Spawner;
 use embassy_stm32::{
     self, bind_interrupts, gpio,
     peripherals::{self, DMA1_CH1, DMA2_CH1},
-    rcc::{
-        AdcClockSource, Clock48MhzSrc, ClockSrc, CrsConfig, CrsSyncSource, Pll, PllM, PllN, PllR,
-        PllSrc,
-    },
+    rcc::{AdcClockSource, Clk48Src, Hse, HseMode, Pll, PllMul, PllPreDiv, PllQDiv, PllRDiv, Pllsrc},
     time::Hertz,
     usart::{self, Uart, UartTx},
 };
@@ -71,7 +68,7 @@ impl KeyboardStatus {
 
         Self {
             usb_connected: true,
-            split_side: SplitSide::Right,
+            split_side: SplitSide::Left,
         }
     }
 }
@@ -83,9 +80,9 @@ macro_rules! run_maintask {
         let uart = define_usart!(SplitSide::$split_side, $p);
         let matrix_cfg = define_matrix_config!(SplitSide::$split_side, $p);
 
-        let (uart_tx, uart_rx) = uart.split();
-        let comm_rx = comm::CommRx::new(uart_rx, $channel.sender());
-        $spawner.must_spawn(paste! {[< $split_side:lower _uart_read_task >](comm_rx)});
+        let (uart_tx, _uart_rx) = uart.expect("USART SPLIT").split();
+        // let comm_rx = comm::CommRx::new(uart_rx, $channel.sender());
+        // $spawner.must_spawn(paste! {[< $split_side:lower _uart_read_task >](comm_rx)});
         if !$status.usb_connected {
             $spawner.must_spawn(
                 paste! {[< $split_side:lower _slave_event_task >]($channel.receiver(), uart_tx)},
@@ -101,19 +98,17 @@ async fn main(spawner: Spawner) {
     let mut config = embassy_stm32::Config::default();
 
     config.rcc.pll = Some(Pll {
-        source: PllSrc::HSE(Hertz(12_000_000)),
-        prediv_m: PllM::Div3,
-        mul_n: PllN::Mul85,
-        div_p: None,
-        div_q: Some(embassy_stm32::rcc::PllQ::Div2),
-        div_r: Some(PllR::Div2),
+        source: Pllsrc::HSE,
+        prediv: PllPreDiv::DIV3,
+        mul: PllMul::MUL85,
+        divp: None,
+        divq: Some(PllQDiv::DIV2),
+        divr: Some(PllRDiv::DIV2),
     });
 
-    config.rcc.mux = ClockSrc::PLL;
-    config.rcc.adc12_clock_source = AdcClockSource::SysClk;
-    config.rcc.clock_48mhz_src = Some(Clock48MhzSrc::Hsi48(Some(CrsConfig {
-        sync_src: CrsSyncSource::Usb,
-    })));
+    config.rcc.hse = Some(Hse{freq: Hertz(12_000_000), mode: HseMode::Oscillator});
+    config.rcc.adc12_clock_source = AdcClockSource::SYS;
+    config.rcc.clk48_src = Clk48Src::HSI48;
 
     let p = embassy_stm32::init(config);
     let channel = event_channel::init();
@@ -164,9 +159,10 @@ async fn main_task<
 
     loop {
         while let Some(e) = scanner.scan() {
+
             event_sender.send(e).await;
         }
-
+        
         Timer::after(config::SCAN_DELAY).await;
     }
 }
@@ -176,7 +172,7 @@ async fn slave_event_handler<T: usart::BasicInstance, DMA: usart::TxDma<T>>(
     uart_tx: &mut UartTx<'static, T, DMA>,
 ) {
     loop {
-        let event = receiver.recv().await;
+        let event = receiver.receive().await;
         debug!("Received Event: {:?}", defmt::Debug2Format(&event));
 
         // send event to other halve.
@@ -206,14 +202,14 @@ async fn right_slave_event_task(
     slave_event_handler(receiver, &mut tx).await;
 }
 
-#[embassy_executor::task]
-async fn left_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART1, DMA1_CH1>) {
-    info!("Start left_uart_read_task");
-    comm_rx.run().await;
-}
+// #[embassy_executor::task]
+// async fn left_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART1>) {
+//     info!("Start left_uart_read_task");
+//     comm_rx.run().await;
+// }
 
-#[embassy_executor::task]
-async fn right_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART2, DMA1_CH1>) {
-    info!("Start right_uart_read_task");
-    comm_rx.run().await;
-}
+// #[embassy_executor::task]
+// async fn right_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART2>) {
+//     info!("Start right_uart_read_task");
+//     comm_rx.run().await;
+// }

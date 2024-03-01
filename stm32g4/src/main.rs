@@ -12,11 +12,13 @@ use eck_rs::{
 };
 use embassy_executor::Spawner;
 use embassy_stm32::{
-    self, bind_interrupts, gpio,
+    bind_interrupts, gpio,
     peripherals::{self, DMA1_CH1, DMA2_CH1},
-    rcc::{AdcClockSource, Clk48Src, Hse, HseMode, Pll, PllMul, PllPreDiv, PllQDiv, PllRDiv, Pllsrc},
+    rcc::{
+        AdcClockSource, Clk48Src, Hse, HseMode, Pll, PllMul, PllPreDiv, PllQDiv, PllRDiv, Pllsrc,
+    },
     time::Hertz,
-    usart::{self, Uart, UartTx},
+    usart::{self, Uart, UartRx, UartTx},
 };
 use embassy_time::Timer;
 use panic_probe as _;
@@ -80,10 +82,12 @@ macro_rules! run_maintask {
         let uart = define_usart!(SplitSide::$split_side, $p);
         let matrix_cfg = define_matrix_config!(SplitSide::$split_side, $p);
 
-        let (uart_tx, _uart_rx) = uart.expect("USART SPLIT").split();
-        // let comm_rx = comm::CommRx::new(uart_rx, $channel.sender());
-        // $spawner.must_spawn(paste! {[< $split_side:lower _uart_read_task >](comm_rx)});
-        if !$status.usb_connected {
+        let (uart_tx, uart_rx) = uart.expect("USART SPLIT").split();
+        if $status.usb_connected {
+            $spawner.must_spawn(
+                paste! {[< $split_side:lower _uart_read_task >]($channel.sender(), uart_rx)},
+            );
+        } else {
             $spawner.must_spawn(
                 paste! {[< $split_side:lower _slave_event_task >]($channel.receiver(), uart_tx)},
             )
@@ -106,7 +110,10 @@ async fn main(spawner: Spawner) {
         divr: Some(PllRDiv::DIV2),
     });
 
-    config.rcc.hse = Some(Hse{freq: Hertz(12_000_000), mode: HseMode::Oscillator});
+    config.rcc.hse = Some(Hse {
+        freq: Hertz(12_000_000),
+        mode: HseMode::Oscillator,
+    });
     config.rcc.adc12_clock_source = AdcClockSource::SYS;
     config.rcc.clk48_src = Clk48Src::HSI48;
 
@@ -159,10 +166,9 @@ async fn main_task<
 
     loop {
         while let Some(e) = scanner.scan() {
-
             event_sender.send(e).await;
         }
-        
+
         Timer::after(config::SCAN_DELAY).await;
     }
 }
@@ -202,14 +208,20 @@ async fn right_slave_event_task(
     slave_event_handler(receiver, &mut tx).await;
 }
 
-// #[embassy_executor::task]
-// async fn left_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART1>) {
-//     info!("Start left_uart_read_task");
-//     comm_rx.run().await;
-// }
+#[embassy_executor::task]
+async fn left_uart_read_task(
+    event_sender: event_channel::EventSender<'static>,
+    rx: UartRx<'static, peripherals::USART1, DMA1_CH1>,
+) {
+    info!("Start left_uart_read_task");
+    comm::receive(event_sender, rx).await;
+}
 
-// #[embassy_executor::task]
-// async fn right_uart_read_task(mut comm_rx: comm::CommRx<'static, peripherals::USART2>) {
-//     info!("Start right_uart_read_task");
-//     comm_rx.run().await;
-// }
+#[embassy_executor::task]
+async fn right_uart_read_task(
+    event_sender: event_channel::EventSender<'static>,
+    rx: UartRx<'static, peripherals::USART2, DMA1_CH1>,
+) {
+    info!("Start right_uart_read_task");
+    comm::receive(event_sender, rx).await;
+}

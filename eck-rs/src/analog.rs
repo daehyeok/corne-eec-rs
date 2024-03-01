@@ -1,4 +1,3 @@
-use core;
 use digital_hal::OutputPin;
 use embedded_hal::digital::v2 as digital_hal;
 

@@ -1,5 +1,5 @@
 use embassy_stm32::{
-    gpio::{AnyPin, Output},
+    gpio::Output,
     usart::{self, Parity},
 };
 use embassy_time::Duration;

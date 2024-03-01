@@ -7,7 +7,6 @@ use embassy_stm32::{
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::Timer;
 use embassy_usb::{
-    self,
     class::hid::{HidReaderWriter, HidWriter, State},
     Builder, Config, Handler,
 };
@@ -131,7 +130,7 @@ pub async fn init<DP, DM>(
 }
 
 pub async fn wait_until_configured() {
-    while let false = CONFIGURED.wait().await {}
+    while !(CONFIGURED.wait().await) {}
 }
 
 struct DeviceStateHandler {}

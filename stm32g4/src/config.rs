@@ -83,8 +83,8 @@ macro_rules! define_matrix_config {
             col_mux_channel: [6, 7, 2, 1, 0, 3, 4],
             drain: opendrain_output! {$p.PB0},
             row_pins: pushpull_output!($p.PA0, $p.PA1, $p.PA2, $p.PA3),
-            transform: config::right_matrix_transform,
-            thresholds: [[2000u16; 7]; 4],
+            transform: config::left_matrix_transform,
+            thresholds: [[4000u16; 7]; 4],
             nbounce: 2,
         }
     };
@@ -96,7 +96,7 @@ macro_rules! define_matrix_config {
             drain: opendrain_output! {$p.PB0},
             row_pins: pushpull_output!($p.PA15, $p.PA10, $p.PA9, $p.PA8),
             transform: config::right_matrix_transform,
-            thresholds: [[2000u16; 7]; 4],
+            thresholds: [[4000u16; 7]; 4],
             nbounce: 2,
         }
     };
@@ -139,12 +139,12 @@ pub struct MatrixConfig {
 
 pub fn usart_config() -> usart::Config {
     let mut cfg = usart::Config::default();
+    cfg.baudrate = 4800;
     cfg.parity = Parity::ParityEven;
     cfg
 }
 
 // (tx  rx) to layout(row, col)
-#[allow(dead_code)]
 pub fn left_matrix_transform(tx: u8, rx: u8) -> (u8, u8) {
     if rx == (RX_SIZE - 1) as u8 {
         (4, 2 + tx)

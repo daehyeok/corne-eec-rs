@@ -24,9 +24,9 @@ pub fn new_shared_layout() -> SharedLayout {
 }
 
 const FNSPC: Action = HoldTap(&HoldTapAction {
-    timeout: 100,
+    timeout: 25,
     tap_hold_interval: 0,
-    config: HoldTapConfig::HoldOnOtherKeyPress,
+    config: HoldTapConfig::PermissiveHold,
     hold: l(1),
     tap: k(Space),
 });
@@ -41,7 +41,7 @@ pub static LAYERS: Layers  = layout::layout! {
 /*Row1*/[Tab     Q        W        E        R        T        Y        U        I        O        P        Bslash  ]
 /*Row2*/[LCtrl   A        S        D        F        G        H        J        K        L        SColon   Quote   ]
 /*Row3*/[LShift  Z        X        C        V        B        N        M        Comma    Dot      Slash    RShift  ]
-/*Row4*/[No      No       No       LAlt     LGui     {FNSPC}  {FNSPC}  Enter    Down     Up       No       No      ]
+/*Row4*/[No      No       No       LGui    LAlt     {FNSPC}  {FNSPC}  Enter    Down     Up       No       No      ]
     }{
 //     | 00(L0) | 01(L1) | 02(L2) | 03(L3) | 04(L4) | 05(L5) | 06(R0) | 07(R1) | 08(R2) | 09(R3) | 10(R4) | 11(R5) |
 /*Row0*/[Escape  {_____}  {_____}  {_____}  {_____}  {_____}  {_____}  {_____}  {_____}  Minus    Equal    {_____} ]

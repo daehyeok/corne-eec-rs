@@ -1,11 +1,13 @@
-use core::{default::Default, num::TryFromIntError};
 use defmt::*;
 use eck_rs::event::Event;
 use embassy_stm32::usart::{self, RxDma, TxDma, UartRx, UartTx};
 use embedded_io::blocking::ReadExactError;
 use static_cell::StaticCell;
 
-use crate::event_channel::EventSender;
+use crate::{
+    event_channel::EventSender,
+    layers::{COLS, ROWS},
+};
 
 const RING_BUFFER_SIZE: usize = 255;
 const MSG_BUFFER_SIZE: usize = 255;
@@ -15,10 +17,7 @@ static RX_RING_BUFFER: StaticCell<[u8; RING_BUFFER_SIZE]> = StaticCell::new();
 pub enum CommError {
     Usart(usart::Error),
     UsartRead(ReadExactError<usart::Error>),
-    Serialize(postcard::Error),
-    TryFromIntError(TryFromIntError),
-    NotImplemented,
-    Invailed,
+    DecodeEvent,
 }
 
 impl From<usart::Error> for CommError {
@@ -33,66 +32,31 @@ impl From<ReadExactError<usart::Error>> for CommError {
     }
 }
 
-impl From<postcard::Error> for CommError {
-    fn from(err: postcard::Error) -> Self {
-        Self::Serialize(err)
-    }
-}
-
-impl From<TryFromIntError> for CommError {
-    fn from(err: TryFromIntError) -> Self {
-        Self::TryFromIntError(err)
-    }
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
-enum ReadState {
-    #[default]
-    Header,
-    Type,
-    TxIdx,
-    RxIdx,
-}
-
 // index will not excess 0xff, Use it as a header.
 const HEADER_BYTE: u8 = 0xff;
 
-#[derive(Default)]
-struct ReadStateMachine {
-    state: ReadState,
-    buf: [u8; 3],
+fn encode_event(e: &Event) -> Option<u8> {
+    match e {
+        Event::KeyPress(i, j) => Some(*i * COLS as u8 + *j),
+        Event::KeyRelease(i, j) => Some(0x80 | (*i * COLS as u8 + *j)),
+        _ => None,
+    }
 }
 
-impl ReadStateMachine {
-    fn push(&mut self, byte: u8) -> Result<Option<Event>, CommError> {
-        if self.state != ReadState::Header && byte == HEADER_BYTE {
-            self.state = ReadState::Header;
-            return Err(CommError::Invailed);
-        }
+fn decode_event(k: u8) -> Result<Event, CommError> {
+    let index = k & 0x7F;
 
-        match self.state {
-            ReadState::Header => {
-                self.state = ReadState::Type;
-            }
-            ReadState::Type => {
-                self.state = ReadState::TxIdx;
-                self.buf[0] = byte
-            }
-            ReadState::TxIdx => {
-                self.state = ReadState::RxIdx;
-                self.buf[1] = byte
-            }
-            ReadState::RxIdx => {
-                self.state = ReadState::Header;
-                return match self.buf[0] {
-                    0 => Ok(Some(Event::KeyPress(self.buf[1], byte))),
-                    1 => Ok(Some(Event::KeyRelease(self.buf[1], byte))),
-                    _ => Err(CommError::NotImplemented),
-                };
-            }
-        }
+    if index >= (COLS * ROWS) as u8 {
+        error!("Received index to large: {:?}", k);
+        return Err(CommError::DecodeEvent);
+    }
+    let i = index / COLS as u8;
+    let j = index % COLS as u8;
 
-        Ok(None)
+    if (k & 0x80) == 0 {
+        Ok(Event::KeyPress(i, j))
+    } else {
+        Ok(Event::KeyRelease(i, j))
     }
 }
 
@@ -106,20 +70,31 @@ pub async fn receive<'a, T: usart::BasicInstance, DMA: RxDma<T>>(
     if let Err(e) = uart_rx.start() {
         error!("UART start error: {:?}", e);
     };
-    let mut state_machine = ReadStateMachine::default();
+
+    let mut wait_header = true;
     loop {
-        let mut buf = [0u8; MSG_BUFFER_SIZE];
+        let mut buf = [0u8; 1];
         let res = uart_rx.read(&mut buf).await;
         if let Err(e) = res {
             error!("UART read error: {:?}", e);
             continue;
         }
         let len = res.unwrap();
-        for byte in buf.iter().take(len) {
-            match state_machine.push(*byte) {
-                Ok(Some(e)) => event_sender.send(e).await,
-                Ok(None) => {}
-                Err(e) => error!("Failed to deserialzed. - {:?}", defmt::Debug2Format(&e)),
+        for b in buf.iter().take(len) {
+            debug!("USART received byte {:?}", b);
+            if !wait_header && *b != HEADER_BYTE {
+                match decode_event(*b) {
+                    Ok(e) => {
+                        debug!("USART received Event {:?}", e);
+                        event_sender.send(e).await
+                    }
+                    Err(_) => error!("Decode error"),
+                }
+                wait_header = true;
+            }
+            if *b == HEADER_BYTE {
+                wait_header = false;
+                continue;
             }
         }
     }
@@ -130,10 +105,9 @@ pub async fn send<'a, T: usart::BasicInstance, DMA: TxDma<T>>(
     e: &Event,
     uart_tx: &mut UartTx<'a, T, DMA>,
 ) -> Result<(), CommError> {
-    match e {
-        Event::KeyPress(i, j) => uart_tx.write(&[HEADER_BYTE, 0, *i, *j]).await?,
-        Event::KeyRelease(i, j) => uart_tx.write(&[HEADER_BYTE, 1, *i, *j]).await?,
-        _ => return Err(CommError::NotImplemented),
+    if let Some(k) = encode_event(e) {
+        debug!("USART Send event {:?}", e);
+        uart_tx.write(&[HEADER_BYTE, k]).await?
     }
 
     Ok(())

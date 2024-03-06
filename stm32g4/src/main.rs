@@ -37,40 +37,23 @@ struct KeyboardStatus {
 }
 
 impl KeyboardStatus {
-    pub fn new(// pc6: &mut peripherals::PC6,
-        // pa0: &mut peripherals::PA0,
-        // pa8: &mut peripherals::PA8,
-    ) -> Self {
-        // let mut left_vbus_pin = gpio::Flex::new(pc6);
-        // let mut right_vbus_pin = gpio::Flex::new(pa0);
-        // left_vbus_pin.set_as_input(gpio::Pull::Down);
-        // right_vbus_pin.set_as_input(gpio::Pull::Down);
-        // let handness_pin = gpio::Input::new(pa8, gpio::Pull::Down);
+    pub fn new(pa4: &mut peripherals::PA4, pb4: &mut peripherals::PB4) -> Self {
+        let handness_pin = gpio::Input::new(pa4, gpio::Pull::Down);
+        let split_side = match handness_pin.is_high() {
+            true => SplitSide::Right,
+            false => SplitSide::Left,
+        };
 
-        // let left_vbus_detect = left_vbus_pin.is_high();
-        // if !left_vbus_detect {
-        //     debug!("left vbus is low");
-        //     left_vbus_pin.set_as_output(gpio::Speed::Medium);
-        //     left_vbus_pin.set_high();
-        // }
+        let vbus_pin = gpio::Input::new(pb4, gpio::Pull::Down);
+        let usb_connected = vbus_pin.is_high();
 
-        // let split_side = match handness_pin.is_high() {
-        //     true => SplitSide::Left,
-        //     false => SplitSide::Right,
-        // };
-
-        // let vbus_dectect = match split_side {
-        //     SplitSide::Left => left_vbus_detect,
-        //     SplitSide::Right => right_vbus_pin.is_high(),
-        // };
-
-        // if !left_vbus_detect {
-        //     left_vbus_pin.set_low();
-        // }
+        if usb_connected {
+            debug!("VBUS detected");
+        }
 
         Self {
             usb_connected: true,
-            split_side: SplitSide::Left,
+            split_side, //: SplitSide::Right,
         }
     }
 }
@@ -117,10 +100,10 @@ async fn main(spawner: Spawner) {
     config.rcc.adc12_clock_source = AdcClockSource::SYS;
     config.rcc.clk48_src = Clk48Src::HSI48;
 
-    let p = embassy_stm32::init(config);
+    let mut p = embassy_stm32::init(config);
     let channel = event_channel::init();
 
-    let status = KeyboardStatus::new();
+    let status = KeyboardStatus::new(&mut p.PA4, &mut p.PB4);
     info!("Keyboard side: {:?}", status.split_side);
     info!("USB connected: {:?}", status.usb_connected);
 
@@ -168,7 +151,7 @@ async fn main_task<
         while let Some(e) = scanner.scan() {
             event_sender.send(e).await;
         }
-
+        //debug!("{:?}", scanner.raw_values());
         Timer::after(config::SCAN_DELAY).await;
     }
 }

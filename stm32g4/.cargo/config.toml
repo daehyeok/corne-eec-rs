@@ -6,6 +6,7 @@ target = "thumbv7em-none-eabi"
 
 [env]
 DEFMT_LOG = "debug"
+# DEFMT_LOG = "info"
 
 [profile.dev]
 opt-level = 3

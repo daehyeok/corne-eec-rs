@@ -102,7 +102,7 @@ macro_rules! define_matrix_config {
     };
 }
 
-#[derive(defmt::Format, Debug)]
+#[derive(defmt::Format, Debug, PartialEq)]
 pub enum SplitSide {
     #[allow(dead_code)]
     Left,
@@ -117,7 +117,7 @@ pub const USB_MANUFACTURER: &str = "Daehyeok Mun";
 pub const USB_PRODUCT: &str = "Corne EEC - STM32";
 pub const USB_SERIAL_NUMBER: &str = env!("CARGO_PKG_VERSION");
 
-pub const DISCHARGE_DELAY_CLOCKS: u32 = 2500;
+pub const DISCHARGE_DELAY_CLOCKS: u32 = 5000;
 pub const SCAN_DELAY: Duration = Duration::from_millis(1);
 pub const TICK_PERIOD: Duration = Duration::from_millis(1);
 

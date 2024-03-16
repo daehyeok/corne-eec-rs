@@ -5,9 +5,8 @@ edition      = "2021"
 license      = "MIT"
 
 [dependencies]
-embedded-hal = { version = "0.2.7", features = ["unproven"] }
+embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
 keyberon = { git="https://github.com/TeXitoi/keyberon", rev="24bd53f" }
-log = "0.4.17"
 heapless = "0.7.16"
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"], optional = true}
 defmt = "0.3.4"

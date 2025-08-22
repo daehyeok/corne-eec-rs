@@ -1,16 +1,11 @@
-use crate::analog::{RxModule, TxModule};
-use crate::debounce::Debouncer;
-use crate::error::KeyboardError;
-use crate::event::Event;
+use crate::eck::{
+    analog::{RxModule, TxModule},
+    debounce::Debouncer,
+    error::KeyboardError,
+    event::Event,
+};
 #[cfg(debug_assertions)]
 use defmt::*;
-
-pub trait Scanner {
-    // return changed key's coordnation.
-    // if reach the end of matrix return None,
-    // Then next call will re-start from front of matrix.
-    fn scan(&mut self) -> Result<Option<Event>, KeyboardError>;
-}
 
 // use keyberon::layout::Event;
 pub struct ECScanner<TX, RX, const TXSIZE: usize, const RXSIZE: usize>
@@ -65,15 +60,8 @@ where
         let mut value: RX::AdcUnit = RX::AdcUnit::default();
 
         self.rx.select(coord.rx);
-        #[cfg(feature = "cortex-m")]
-        {
-            cortex_m::interrupt::free(|_| value = self.read_raw(coord));
-        }
+        cortex_m::interrupt::free(|_| value = self.read_raw(coord));
 
-        #[cfg(not(feature = "cortex-m"))]
-        {
-            value = self.read_raw(coord);
-        }
         self.tx.discharge_capacitor(coord.tx);
 
         self.values[coord.tx][coord.rx] = value;
@@ -104,10 +92,6 @@ where
         };
 
         Ok(None)
-    }
-
-    pub fn raw_values(&self) -> &[[RX::AdcUnit; RXSIZE]; TXSIZE] {
-        &self.values
     }
 
     //discharge all lines for inital bounding.

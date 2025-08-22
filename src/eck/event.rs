@@ -1,5 +1,3 @@
-use keyberon;
-
 type KeyberonEvent = keyberon::layout::Event;
 
 #[derive(defmt::Format, Debug, Copy, Clone, Default)]

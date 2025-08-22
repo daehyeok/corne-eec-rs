@@ -4,7 +4,4 @@ pub enum KeyboardError {
     ColOutOfRange(usize),
     MuxOutOfRange(usize),
     Gpio,
-
-    InvaildHeader,
-    InvailedCRC,
 }

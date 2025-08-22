@@ -1,4 +1,4 @@
-use crate::error::KeyboardError;
+use crate::eck::error::KeyboardError;
 
 pub struct Debouncer<const ROWS: usize, const COLS: usize> {
     state: [[bool; COLS]; ROWS], //current key state.

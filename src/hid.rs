@@ -1,10 +1,15 @@
 use defmt::{debug, error, info};
-use embassy_stm32::{peripherals, usb::Driver};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::signal::Signal;
+use embassy_executor::Spawner;
+use embassy_stm32::{
+    peripherals,
+    usb::{self, Driver},
+};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::Timer;
-use embassy_usb::class::hid::{HidReader, HidReaderWriter, HidWriter, State};
-use embassy_usb::{Builder, Config, Handler};
+use embassy_usb::{
+    class::hid::{HidReaderWriter, HidWriter, State},
+    Config, Handler,
+};
 
 use static_cell::StaticCell;
 use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
@@ -12,23 +17,18 @@ use usbd_hid::descriptor::{KeyboardReport, SerializedDescriptor};
 use crate::config::{
     TICK_PERIOD, USB_MANUFACTURER, USB_PID, USB_PRODUCT, USB_SERIAL_NUMBER, USB_VID,
 };
-use {defmt_rtt as _, panic_probe as _};
+use defmt_rtt as _;
+use panic_probe as _;
 
 const READ_N: usize = 1;
 const WRITE_N: usize = 8;
 
 //Type alias for generic USB types.
-pub type Stm32UsbDriver<'a> = Driver<'a, peripherals::USB>;
-pub type Stm32HidReaderWriter<'a> = HidReaderWriter<'a, Stm32UsbDriver<'a>, READ_N, WRITE_N>;
-pub type Stm32HidWriter<'a> = HidWriter<'a, Stm32UsbDriver<'a>, WRITE_N>;
-pub type Stm32HidReader<'a> = HidReader<'a, Stm32UsbDriver<'a>, READ_N>;
-pub type Stm32UsbDevice<'a> = embassy_usb::UsbDevice<'a, Stm32UsbDriver<'a>>;
 
-pub struct UsbHid<'a> {
-    pub reader: Stm32HidReader<'a>,
-    pub writer: Stm32HidWriter<'a>,
-    pub device: Stm32UsbDevice<'a>,
-}
+type Stm32UsbDriver<'a> = Driver<'a, peripherals::USB>;
+type Stm32HidReaderWriter<'a> = HidReaderWriter<'a, Stm32UsbDriver<'a>, READ_N, WRITE_N>;
+type Stm32HidWriter<'a> = HidWriter<'a, Stm32UsbDriver<'a>, WRITE_N>;
+type Stm32UsbDevice<'a> = embassy_usb::UsbDevice<'a, Stm32UsbDriver<'a>>;
 
 static CONFIGURED: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static SUSPENDED: Signal<CriticalSectionRawMutex, bool> = Signal::new();
@@ -37,7 +37,12 @@ static SUSPENDED: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static USB_CONFIG: StaticCell<Config> = StaticCell::new();
 static USB_BUFFER: StaticCell<UsbBuffer> = StaticCell::new();
 static USB_STATE: StaticCell<State> = StaticCell::new();
-static USB_HID: StaticCell<UsbHid> = StaticCell::new();
+
+static SHARED_LAYOUT: StaticCell<crate::layers::SharedLayout> = StaticCell::new();
+static KEYBERON_TICK_RES: StaticCell<KeyberonTickRes> = StaticCell::new();
+
+static USB_DEVICE: StaticCell<Stm32UsbDevice> = StaticCell::new();
+
 static DEVICE_HANDLER: StaticCell<DeviceStateHandler> = StaticCell::new();
 
 // embassy-usb DeviceBuilder needs some buffers for building the descriptors.
@@ -46,7 +51,6 @@ struct UsbBuffer {
     config_descriptor: [u8; 256],
     bos_descriptor: [u8; 256],
     msos_descriptor: [u8; 256],
-    control_buf: [u8; 64],
 }
 
 impl UsbBuffer {
@@ -56,12 +60,15 @@ impl UsbBuffer {
             config_descriptor: [0u8; 256],
             bos_descriptor: [0u8; 256],
             msos_descriptor: [0u8; 256],
-            control_buf: [0u8; 64],
         }
     }
 }
 
-pub fn init(driver: Stm32UsbDriver<'static>) -> &'static mut UsbHid<'static> {
+pub async fn init(
+    driver: usb::Driver<'static, embassy_stm32::peripherals::USB>,
+    spawner: &Spawner,
+    event_receiver: crate::event_channel::EventReceiver<'static>,
+) {
     // Create embassy-usb Config
     let config = USB_CONFIG.init(Config::new(USB_VID, USB_PID));
     config.manufacturer = Some(USB_MANUFACTURER);
@@ -74,14 +81,13 @@ pub fn init(driver: Stm32UsbDriver<'static>) -> &'static mut UsbHid<'static> {
 
     // Create embassy-usb DeviceBuilder using the driver and config.
     let state = USB_STATE.init(State::new());
-    let mut builder = Builder::new(
+    let mut builder = embassy_usb::Builder::new(
         driver,
         *config,
         &mut buffer.device_descriptor,
         &mut buffer.config_descriptor,
         &mut buffer.bos_descriptor,
         &mut buffer.msos_descriptor,
-        &mut buffer.control_buf,
     );
 
     let handler = DEVICE_HANDLER.init(DeviceStateHandler::new());
@@ -96,19 +102,22 @@ pub fn init(driver: Stm32UsbDriver<'static>) -> &'static mut UsbHid<'static> {
     };
 
     let rw = Stm32HidReaderWriter::new(&mut builder, state, config);
-    let (reader, writer) = rw.split();
-    let device = builder.build();
+    let (_, writer) = rw.split();
 
-    // Build the builder.
-    USB_HID.init(UsbHid {
-        reader,
-        writer,
-        device,
-    })
+    let device = USB_DEVICE.init(builder.build());
+
+    spawner.must_spawn(usb_device_task(device));
+    wait_until_configured().await;
+
+    let layout = SHARED_LAYOUT.init(crate::layers::new_shared_layout());
+    let tick_res = KEYBERON_TICK_RES.init(KeyberonTickRes::new(writer, layout));
+
+    spawner.must_spawn(keyberon_tick(tick_res));
+    spawner.must_spawn(master_event_handler(event_receiver, layout));
 }
 
 pub async fn wait_until_configured() {
-    while let false = CONFIGURED.wait().await {}
+    while !(CONFIGURED.wait().await) {}
 }
 
 struct DeviceStateHandler {}
@@ -159,15 +168,12 @@ pub async fn usb_device_task(device: &'static mut Stm32UsbDevice<'static>) {
 }
 
 pub struct KeyberonTickRes<'a> {
-    hid_writer: &'a mut Stm32HidWriter<'a>,
+    hid_writer: Stm32HidWriter<'a>,
     layout: &'a crate::layers::SharedLayout,
 }
 
 impl<'a> KeyberonTickRes<'a> {
-    pub fn new(
-        hid_writer: &'a mut Stm32HidWriter<'a>,
-        layout: &'a crate::layers::SharedLayout,
-    ) -> Self {
+    pub fn new(hid_writer: Stm32HidWriter<'a>, layout: &'a crate::layers::SharedLayout) -> Self {
         Self { hid_writer, layout }
     }
 }
@@ -201,5 +207,25 @@ pub async fn keyberon_tick(res: &'static mut KeyberonTickRes<'static>) {
 
         cur_report = keyberon_report;
         Timer::after(TICK_PERIOD).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn master_event_handler(
+    receiver: crate::event_channel::EventReceiver<'static>,
+    layout: &'static crate::layers::SharedLayout,
+) {
+    info!("Start master_event_handler");
+    loop {
+        let event = receiver.receive().await;
+        debug!("Received Event: {:?}", defmt::Debug2Format(&event));
+
+        let key_event = match event.into_keyberon() {
+            Some(e) => e,
+            None => continue,
+        };
+        layout.lock(|l| {
+            l.borrow_mut().event(key_event);
+        });
     }
 }

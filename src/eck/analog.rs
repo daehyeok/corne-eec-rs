@@ -1,8 +1,6 @@
-use core;
-use digital_hal::OutputPin;
-use embedded_hal::digital::v2 as digital_hal;
+use embedded_hal_1::digital::OutputPin;
 
-use crate::mux::Multiplxer;
+use crate::eck::mux::Multiplxer;
 
 pub trait ADCReader {
     type AdcUnit: core::fmt::Debug

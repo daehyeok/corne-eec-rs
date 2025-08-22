@@ -140,3 +140,13 @@ tags
 [._]*.un~
 
 # End of https://www.toptal.com/developers/gitignore/api/emacs,macos,linux,rust,rust-analyzer,vim
+
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml

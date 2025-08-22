@@ -1,0 +1,29 @@
+[package]
+edition = "2021"
+name = "corne-eec"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[features]
+nightly = ["embassy-executor/nightly"]
+default = ["debugger", "nightly"]
+debugger = ["panic-probe", "defmt-rtt", "defmt"]
+release = ["nightly", "panic-reset"]
+linux_layout = []
+
+[dependencies]
+cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
+cortex-m-rt = "0.7.5"
+defmt = { version = "1.0.1", optional = true }
+defmt-rtt = { version = "1.0.0", optional = true }
+embassy-executor = { version = "0.9.0", features = ["arch-cortex-m", "executor-thread", "defmt"] }
+embassy-stm32 = { version = "0.4.0", features = ["defmt", "unstable-pac", "stm32g431kb", "time-driver-any", "exti",  "memory-x"] }
+embassy-sync = {  version = "0.7.1", features = ["defmt"] }
+embassy-time = {  version = "0.5.0", features = ["defmt", "defmt-timestamp-uptime", "tick-hz-32_768"] }
+embassy-usb = { version = "0.5.0", features = ["defmt"] }
+embedded-hal-1 = { package = "embedded-hal", version = "1.0" }
+keyberon = { git = "https://github.com/TeXitoi/keyberon", rev = "32a7eed" }
+panic-probe = { version = "1.0.0", features = ["print-defmt"], optional = true }
+panic-reset = { version = "0.1.1", optional = true }
+static_cell = "2.1.1"
+usbd-hid = "0.8.2"

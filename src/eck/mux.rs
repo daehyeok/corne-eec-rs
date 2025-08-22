@@ -1,7 +1,6 @@
-use digital_hal::OutputPin;
-use embedded_hal::digital::v2 as digital_hal;
+use embedded_hal_1::digital::OutputPin;
 
-use crate::error::KeyboardError;
+use crate::eck::error::KeyboardError;
 
 pub trait Multiplxer {
     fn enable(&mut self) -> Result<(), KeyboardError>;

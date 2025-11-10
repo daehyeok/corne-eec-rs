@@ -2,21 +2,15 @@ use embedded_hal_1::digital::OutputPin;
 
 use crate::eck::mux::Multiplxer;
 
+pub type AdcUnit = u16;
+
 pub trait ADCReader {
-    type AdcUnit: core::fmt::Debug
-        + core::cmp::PartialOrd
-        + core::marker::Copy
-        + core::default::Default;
-    fn read(&mut self) -> Self::AdcUnit;
+    fn read(&mut self) -> AdcUnit;
 }
 
 pub trait RxModule {
-    type AdcUnit: core::fmt::Debug
-        + core::cmp::PartialOrd
-        + core::marker::Copy
-        + core::default::Default;
     fn select(&mut self, idx: usize);
-    fn read(&mut self) -> Self::AdcUnit;
+    fn read(&mut self) -> AdcUnit;
 }
 
 pub trait DisChargeDelay {
@@ -48,9 +42,8 @@ where
     MUX: Multiplxer,
     ADC: ADCReader,
 {
-    type AdcUnit = ADC::AdcUnit;
     #[inline(always)]
-    fn read(&mut self) -> ADC::AdcUnit {
+    fn read(&mut self) -> AdcUnit {
         self.adc.read()
     }
 

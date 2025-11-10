@@ -26,7 +26,9 @@
       "rust-analyzer"
       "rust-src"
     ];
-    targets = [ "thumbv7em-none-eabi" ];
+    targets = [
+      "thumbv6m-none-eabi"
+    ];
   };
 
   git-hooks.hooks = {

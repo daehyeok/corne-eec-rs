@@ -10,15 +10,16 @@ use crate::{
         scanner::ECScanner,
     },
 };
-use config::MatrixConfig;
 use defmt::*;
 use defmt_rtt as _;
 use embassy_executor::{self, Spawner};
 use embassy_stm32::{
-    bind_interrupts, gpio, i2c, peripherals,
-    rcc::{self, Hse, HseMode, Pll, PllMul, PllPreDiv, PllQDiv, PllRDiv, PllSource},
-    time::Hertz,
+    adc::{self},
+    bind_interrupts, gpio, i2c,
+    peripherals::{self, ADC1},
+    rcc::{self},
     usart::{self, Uart, UartRx, UartTx},
+    usb, Peri,
 };
 use embassy_time::Timer;
 use panic_probe as _;
@@ -32,14 +33,11 @@ mod hid;
 mod layers;
 
 bind_interrupts!(struct UsbIrqs {
-    USB_LP => embassy_stm32::usb::InterruptHandler<peripherals::USB>;
+    USB_UCPD1_2 => usb::InterruptHandler<peripherals::USB>;
 });
 
-bind_interrupts!(struct I2cIrqs {
-    I2C1_ER => i2c::ErrorInterruptHandler<peripherals::I2C1>;
-    I2C1_EV => i2c::EventInterruptHandler<peripherals::I2C1>;
-    I2C2_ER => i2c::ErrorInterruptHandler<peripherals::I2C2>;
-    I2C2_EV => i2c::EventInterruptHandler<peripherals::I2C2>;
+bind_interrupts!(struct Irqs {
+    I2C1 => i2c::EventInterruptHandler<peripherals::I2C1>, i2c::ErrorInterruptHandler<peripherals::I2C1>;
 });
 
 macro_rules! matrix_output {
@@ -51,44 +49,38 @@ macro_rules! matrix_output {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let mut config = embassy_stm32::Config::default();
-
-    config.rcc.pll = Some(Pll {
-        source: PllSource::HSI,
-        prediv: PllPreDiv::DIV1,
-        mul: PllMul::MUL12,
-        divp: None,
-        divq: Some(PllQDiv::DIV4),
-        divr: Some(PllRDiv::DIV2),
-    });
-
-    config.rcc.hse = Some(Hse {
-        freq: Hertz(8_000_000),
-        mode: HseMode::Oscillator,
-    });
-
-    config.rcc.mux.adc12sel = rcc::mux::Adcsel::SYS;
-    config.rcc.mux.clk48sel = rcc::mux::Clk48sel::HSI48;
+    {
+        use embassy_stm32::rcc::*;
+        // config.rcc.hsi48 = Some(Hsi48Config {
+        //     sync_from_usb: true,
+        // });
+        config.rcc.mux.usbsel = mux::Usbsel::HSI48;
+        config.rcc.mux.adcsel = rcc::mux::Adcsel::SYS;
+    }
+    let p = embassy_stm32::init(config);
 
     debug!("init embassy");
-    let p = embassy_stm32::init(config);
-    let channel = event_channel::init();
 
-    let split_side_output = gpio::Input::new(p.PB3, gpio::Pull::Down);
-    let mut pa4 = matrix_output!(p.PA4);
-    let split_side = match split_side_output.is_high() {
-        true => SplitSide::Left,
-        false => SplitSide::Right,
+    let mut split_side_out = matrix_output!(p.PC15);
+    split_side_out.set_high();
+    let split_side_in = gpio::Input::new(p.PC14, gpio::Pull::Up);
+
+    let split_side = match split_side_in.is_high() {
+        true => SplitSide::Right,
+        false => SplitSide::Left,
     };
-    pa4.set_low();
+    split_side_out.set_low();
     info!("Keyboard side: {:?}", split_side);
 
-    let (uart, matrix_cfg) = match split_side {
+    match split_side {
         SplitSide::Left => {
             bind_interrupts!(struct Irqs {
                 USART1 => usart::InterruptHandler<peripherals::USART1>;
             });
-            (
-                Uart::new(
+            let keyboard_cfg = config::KeyboardConfig {
+                usb_connected: gpio::Input::new(p.PC6, gpio::Pull::Down).is_high(),
+                usb_driver: embassy_stm32::usb::Driver::new(p.USB, UsbIrqs, p.PA12, p.PA11),
+                uart: Uart::new(
                     p.USART1,
                     p.PA10,
                     p.PA9,
@@ -96,113 +88,109 @@ async fn main(spawner: Spawner) {
                     p.DMA1_CH1,
                     p.DMA1_CH2,
                     config::usart_config(),
-                ),
-                config::MatrixConfig {
-                    col_mux_enable: matrix_output!(p.PA8),
-                    col_mux_sels: [pa4, matrix_output!(p.PA5), matrix_output!(p.PA6)],
-                    col_mux_channel: [6, 7, 2, 1, 0, 3, 4],
-                    drain: gpio::OutputOpenDrain::new(
-                        p.PB0,
-                        gpio::Level::High,
-                        gpio::Speed::VeryHigh,
-                    ),
-                    row_pins: [
-                        matrix_output!(p.PA0),
-                        matrix_output!(p.PA1),
-                        matrix_output!(p.PA2),
-                        matrix_output!(p.PA3),
-                    ],
-                    transform: config::left_matrix_transform,
-                    thresholds: [[4000u16; 7]; 4],
-                    nbounce: 2,
-                },
-            )
+                )
+                .unwrap(),
+                col_mux_enable: matrix_output!(p.PA7),
+                col_mux_sels: [
+                    matrix_output!(p.PA4),
+                    matrix_output!(p.PA5),
+                    matrix_output!(p.PA6),
+                ],
+                col_mux_channel: [6, 7, 2, 1, 0, 3, 4],
+                drain: gpio::OutputOpenDrain::new(p.PB0, gpio::Level::High, gpio::Speed::VeryHigh),
+                row_pins: [
+                    matrix_output!(p.PA0),
+                    matrix_output!(p.PA1),
+                    matrix_output!(p.PA2),
+                    matrix_output!(p.PA3),
+                ],
+                transform: config::left_matrix_transform,
+                thresholds: [[4000u16; 7]; 4],
+                nbounce: 2,
+            };
+
+            main_task(spawner, keyboard_cfg, p.ADC1, p.PB1).await;
         }
         SplitSide::Right => {
             bind_interrupts!(struct Irqs {
-                USART2 => usart::InterruptHandler<peripherals::USART2>;
+                USART3_4_5_6_LPUART1 =>     usart::InterruptHandler<peripherals::USART3>;
             });
-            (
-                Uart::new(
-                    p.USART2,
-                    p.PA3,
-                    p.PA2,
+            let keyboard_cfg = config::KeyboardConfig {
+                usb_connected: gpio::Input::new(p.PA0, gpio::Pull::Down).is_high(),
+                usb_driver: embassy_stm32::usb::Driver::new(p.USB, UsbIrqs, p.PA12, p.PA11),
+                uart: Uart::new(
+                    p.USART3,
+                    p.PB9,
+                    p.PB8,
                     Irqs,
                     p.DMA1_CH1,
                     p.DMA1_CH2,
                     config::usart_config(),
-                ),
-                config::MatrixConfig {
-                    col_mux_enable: matrix_output!(p.PA1),
-                    col_mux_sels: [
-                        matrix_output!(p.PA0),
-                        matrix_output!(p.PA5),
-                        matrix_output!(p.PA6),
-                    ],
-                    col_mux_channel: [2, 5, 7, 6, 4, 0, 1],
-                    drain: gpio::OutputOpenDrain::new(
-                        p.PB0,
-                        gpio::Level::High,
-                        gpio::Speed::VeryHigh,
-                    ),
-                    row_pins: [
-                        matrix_output!(p.PA15),
-                        matrix_output!(p.PA10),
-                        matrix_output!(p.PA9),
-                        matrix_output!(p.PA8),
-                    ],
-                    transform: config::right_matrix_transform,
-                    thresholds: [[4000u16; 7]; 4],
-                    nbounce: 2,
-                },
-            )
+                )
+                .unwrap(),
+                col_mux_enable: matrix_output!(p.PB0),
+                col_mux_sels: [
+                    matrix_output!(p.PA1),
+                    matrix_output!(p.PA2),
+                    matrix_output!(p.PA3),
+                ],
+                col_mux_channel: [1, 0, 4, 6, 7, 5, 2],
+                drain: gpio::OutputOpenDrain::new(p.PA7, gpio::Level::High, gpio::Speed::VeryHigh),
+                row_pins: [
+                    matrix_output!(p.PA9),
+                    matrix_output!(p.PA8),
+                    matrix_output!(p.PB2),
+                    matrix_output!(p.PB1),
+                ],
+                transform: config::right_matrix_transform,
+                thresholds: [[4000u16; 7]; 4],
+                nbounce: 2,
+            };
+
+            main_task(spawner, keyboard_cfg, p.ADC1, p.PA5).await;
         }
-    };
+    }
+}
 
-    let (uart_tx, uart_rx) = uart.expect("USART SPLIT").split();
+async fn main_task<'a, ADCPIN: adc::AdcChannel<ADC1>>(
+    spawner: Spawner,
+    keyboard_cfg: config::KeyboardConfig,
+    adc1: Peri<'a, ADC1>,
+    adc_pin: ADCPIN,
+) {
+    let channel = event_channel::init();
 
-    let usb_connected = gpio::Input::new(p.PB6, gpio::Pull::Down).is_high();
-    info!("USB connected: {:?}", usb_connected);
-    if usb_connected {
-        let driver = embassy_stm32::usb::Driver::new(p.USB, UsbIrqs, p.PA12, p.PA11);
-        hid::init(driver, &spawner, channel.receiver()).await;
+    let (uart_tx, uart_rx) = keyboard_cfg.uart.split();
+    info!("USB connected: {:?}", keyboard_cfg.usb_connected);
+    if keyboard_cfg.usb_connected {
+        hid::init(keyboard_cfg.usb_driver, &spawner, channel.receiver()).await;
         spawner.must_spawn(uart_read_task(channel.sender(), uart_rx));
     } else {
         spawner.must_spawn(slave_event_task(channel.receiver(), uart_tx))
     }
 
-    let adc = analog::Adc::new(p.ADC2, p.PA7);
-
-    main_task(matrix_cfg, adc, channel.sender()).await;
-}
-
-async fn main_task<ADCPIN: embassy_stm32::adc::AdcChannel<peripherals::ADC2>>(
-    matrix_cfg: MatrixConfig,
-    adc: analog::Adc<'static, ADCPIN>,
-    event_sender: event_channel::EventSender<'static>,
-) {
     info!("Start main scan task.");
     let discharge_delay = analog::CortexDisChargeDelay::new();
     let mux8 = unwrap!(Mux8::new(
-        matrix_cfg.col_mux_enable,
-        matrix_cfg.col_mux_sels,
-        matrix_cfg.col_mux_channel,
+        keyboard_cfg.col_mux_enable,
+        keyboard_cfg.col_mux_sels,
+        keyboard_cfg.col_mux_channel,
     ));
+    let adc = analog::Adc::new(adc1, adc_pin);
     let rx_mux = RxMux::new(mux8, adc);
-    let tx_charger = TxCharger::new(matrix_cfg.drain, matrix_cfg.row_pins, discharge_delay);
+    let tx_charger = TxCharger::new(keyboard_cfg.drain, keyboard_cfg.row_pins, discharge_delay);
     let mut scanner = ECScanner::new(
         tx_charger,
         rx_mux,
-        matrix_cfg.transform,
-        matrix_cfg.nbounce,
-        matrix_cfg.thresholds,
+        keyboard_cfg.transform,
+        keyboard_cfg.nbounce,
+        keyboard_cfg.thresholds,
     );
 
     scanner.dischage_all();
-
     loop {
         while let Some(e) = scanner.scan() {
-            event_sender.send(e).await;
+            channel.sender().send(e).await;
         }
         //debug!("{:?}", scanner.raw_values());
         Timer::after(config::SCAN_DELAY).await;

@@ -1,24 +1,22 @@
 use crate::eck::analog::{ADCReader, DisChargeDelay};
-use embassy_stm32::{adc, peripherals, Peri};
+use embassy_stm32::{adc, peripherals::ADC1, Peri};
 
-pub struct Adc<'a, ADCPIN: adc::AdcChannel<peripherals::ADC2>> {
-    stm32_adc: adc::Adc<'a, peripherals::ADC2>,
+pub struct Adc<'a, ADCPIN: adc::AdcChannel<ADC1>> {
+    stm32_adc: adc::Adc<'a, ADC1>,
     pin: ADCPIN,
 }
 
-impl<'a, ADCPIN: adc::AdcChannel<peripherals::ADC2>> Adc<'a, ADCPIN> {
-    pub fn new(adc1: Peri<'a, peripherals::ADC2>, pin: ADCPIN) -> Self {
+impl<'a, ADCPIN: adc::AdcChannel<ADC1>> Adc<'a, ADCPIN> {
+    pub fn new(adc1: Peri<'a, ADC1>, pin: ADCPIN) -> Self {
         let stm32_adc = adc::Adc::new(adc1);
         Self { stm32_adc, pin }
     }
 }
 
-impl<'a, ADCPIN> ADCReader for Adc<'a, ADCPIN>
+impl<'a, ADCPIN: adc::AdcChannel<ADC1>> ADCReader for Adc<'a, ADCPIN>
 where
-    ADCPIN: adc::AdcChannel<peripherals::ADC2>,
+    ADCPIN: adc::AdcChannel<ADC1>,
 {
-    type AdcUnit = u16;
-
     #[inline(always)]
     fn read(&mut self) -> u16 {
         self.stm32_adc.blocking_read(&mut self.pin)

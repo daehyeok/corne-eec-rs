@@ -1,8 +1,12 @@
 use embassy_stm32::{
     gpio::Output,
-    usart::{self, Parity},
+    mode, peripherals,
+    usart::{self, Parity, Uart},
+    usb,
 };
 use embassy_time::Duration;
+
+use crate::eck::analog::AdcUnit;
 
 #[derive(defmt::Format, Debug, PartialEq)]
 pub enum SplitSide {
@@ -26,9 +30,10 @@ pub const TICK_PERIOD: Duration = Duration::from_millis(1);
 pub const RX_SIZE: usize = 7;
 pub const TX_SIZE: usize = 4;
 
-pub type AdcUnit = u16;
-
-pub struct MatrixConfig {
+pub struct KeyboardConfig {
+    pub usb_connected: bool,
+    pub usb_driver: usb::Driver<'static, peripherals::USB>,
+    pub uart: Uart<'static, mode::Async>,
     pub col_mux_enable: Output<'static>,
     pub col_mux_sels: [Output<'static>; 3],
     pub col_mux_channel: [u8; RX_SIZE],

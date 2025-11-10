@@ -7,6 +7,8 @@ use crate::eck::{
 #[cfg(debug_assertions)]
 use defmt::*;
 
+use super::analog::AdcUnit;
+
 // use keyberon::layout::Event;
 pub struct ECScanner<TX, RX, const TXSIZE: usize, const RXSIZE: usize>
 where
@@ -19,8 +21,8 @@ where
 
     debouncer: Debouncer<TXSIZE, RXSIZE>,
 
-    thresholds: [[RX::AdcUnit; RXSIZE]; TXSIZE],
-    values: [[RX::AdcUnit; RXSIZE]; TXSIZE],
+    thresholds: [[AdcUnit; RXSIZE]; TXSIZE],
+    values: [[AdcUnit; RXSIZE]; TXSIZE],
 
     coord_iter: CoordIterator<TXSIZE, RXSIZE>,
 }
@@ -35,7 +37,7 @@ where
         rx_mux: RX,
         transform: fn(u8, u8) -> (u8, u8),
         nb_bounce: u8,
-        thresholds: [[RX::AdcUnit; RXSIZE]; TXSIZE],
+        thresholds: [[AdcUnit; RXSIZE]; TXSIZE],
     ) -> Self {
         Self {
             tx,
@@ -44,20 +46,20 @@ where
 
             debouncer: Debouncer::new(nb_bounce),
             thresholds,
-            values: [[RX::AdcUnit::default(); RXSIZE]; TXSIZE],
+            values: [[AdcUnit::default(); RXSIZE]; TXSIZE],
             coord_iter: CoordIterator::<TXSIZE, RXSIZE>::new(),
         }
     }
 
     #[inline(always)]
-    fn read_raw(&mut self, coord: &MatrixCoord) -> RX::AdcUnit {
+    fn read_raw(&mut self, coord: &MatrixCoord) -> AdcUnit {
         self.tx.charge_capacitor(coord.tx);
         self.rx.read()
     }
 
     fn scan_raw(&mut self, coord: &MatrixCoord) -> Result<Option<Event>, KeyboardError> {
         #![allow(unused_assignments)]
-        let mut value: RX::AdcUnit = RX::AdcUnit::default();
+        let mut value: AdcUnit = AdcUnit::default();
 
         self.rx.select(coord.rx);
         cortex_m::interrupt::free(|_| value = self.read_raw(coord));

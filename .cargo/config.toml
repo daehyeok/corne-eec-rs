@@ -1,12 +1,8 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "probe-rs run --chip STM32G431KBTx"
+runner = "probe-rs run --chip STM32G0B1KE"
 
 [build]
-target = "thumbv7em-none-eabi"
+target = "thumbv6m-none-eabi"
 
 [env]
 DEFMT_LOG = "debug"
-# DEFMT_LOG = "info"
-
-[profile.dev]
-opt-level = 3
